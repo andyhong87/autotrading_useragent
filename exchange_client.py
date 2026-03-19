@@ -41,7 +41,12 @@ class AgentExchangeClient:
         exchange_config = {
             "apiKey": api_key,
             "secret": api_secret,
-            "options": {"defaultType": "future"},
+            "options": {
+                "defaultType": "future",
+                # Bybit: /v5/asset/coin/query-info 엔드포인트가 CloudFront 지역 차단됨
+                # 선물 거래에 불필요한 currency 조회를 비활성화
+                **({"fetchCurrencies": False} if exchange_id.lower() == "bybit" else {}),
+            },
         }
         if api_passphrase:
             exchange_config["password"] = api_passphrase
