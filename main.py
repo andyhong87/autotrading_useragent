@@ -299,6 +299,17 @@ async def detect_manual_positions():
             # 청산 감지
             for symbol in list(_known_positions.keys()):
                 if symbol not in current_map:
+                    known = _known_positions[symbol]
+                    prev_qty = float(known.get("contracts", 0) or 0)
+
+                    # 마지막 TP 체결로 포지션이 사라진 경우 → tp-filled 먼저 알림
+                    if prev_qty > 1e-9:
+                        logger.info(
+                            f"[ManualDetect] 포지션 소멸 (마지막 TP 체결 추정): {symbol} "
+                            f"qty {prev_qty} → 0"
+                        )
+                        await _notify_tp_filled(symbol, known, prev_qty, 0.0)
+
                     logger.info(f"[ManualDetect] 포지션 청산 감지: {symbol}")
                     await _notify_position_closed(symbol)
                     del _known_positions[symbol]
