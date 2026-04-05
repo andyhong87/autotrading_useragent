@@ -436,10 +436,19 @@ class AgentExchangeClient:
             raise ExchangeError(f"set_stop_loss failed for {symbol}: {e}")
 
     async def set_trailing_stop(self, symbol: str, trailing_distance: float) -> bool:
-        """트레일링 스탑 설정. Bybit: USDT 거리, Bitget: callbackRatio(%) 자동 변환."""
+        """트레일링 스탑 설정. Bybit: USDT 거리(최소 1%), Bitget: callbackRatio(%) 자동 변환(최소 1%)."""
         try:
             await self._ensure_markets()
             if self.exchange_id == "bybit":
+                position = await self.get_position(symbol)
+                if position:
+                    mark_price = float(position.mark_price or position.entry_price)
+                    min_distance = round(mark_price * 0.01, 1)
+                    if trailing_distance < min_distance:
+                        logger.warning(
+                            f"[TrailingStop] ATR distance {trailing_distance} < 1% min {min_distance} → using min"
+                        )
+                        trailing_distance = min_distance
                 await self.exchange.private_post_v5_position_trading_stop({
                     "category": "linear",
                     "symbol": symbol,
@@ -455,6 +464,11 @@ class AgentExchangeClient:
                 close_side = "sell" if position.side == "LONG" else "buy"
                 mark_price = float(position.mark_price or position.entry_price)
                 callback_ratio = round(trailing_distance / mark_price * 100, 4)
+                if callback_ratio < 1.0:
+                    logger.warning(
+                        f"[TrailingStop] callback_ratio {callback_ratio}% < 1% min → using 1%"
+                    )
+                    callback_ratio = 1.0
                 await self.exchange.private_mix_post_v2_mix_order_place_plan_order({
                     "symbol": symbol,
                     "productType": "USDT-FUTURES",
